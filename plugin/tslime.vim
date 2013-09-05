@@ -1,6 +1,12 @@
 " Tslime.vim. Send portion of buffer to tmux instance
 " Maintainer: C.Coutinho <kikijump [at] gmail [dot] com>
 " Licence:    DWTFYWTPL
+"
+" This is Paul Annesley's hack-and-slash based on the above.
+" It removes default key bindings, and lots of other things.
+" It adds tmux_buffer_from_file and Send_ctrlc_to_Tmux.
+" The latter depends on a hacky external file containing a single 0x03 byte.
+" I'm sure there's a better way.
 
 if exists("g:tslime_loaded")
   finish
@@ -11,49 +17,30 @@ let g:tslime_loaded = 1
 " Main function.
 " Use it in your script if you want to send text to a tmux session.
 function! Send_to_Tmux(text)
-  if !exists("b:tmux_panenumber")
-    if exists("g:tmux_panenumber")
-      let b:tmux_panenumber = g:tmux_panenumber
-    else
-      call <SID>Tmux_Vars()
-    end
-  end
+  call s:tmux_buffer_from_text(a:text)
+  call s:tmux_from_buffer()
+endfunction
 
-  let target = b:tmux_panenumber
+function! Send_ctrlc_to_Tmux()
+  call s:tmux_buffer_from_file("~/.ctrlc")
+  call s:tmux_from_buffer()
+endfunction
 
+function! s:tmux_buffer_from_file(path)
+  call system("tmux load-buffer " . a:path)
+endfunction
+
+function! s:tmux_buffer_from_text(text)
   call system("tmux set-buffer  '" . substitute(a:text, "'", "'\\\\''", 'g') . "'" )
-  call system("tmux paste-buffer -t " . target)
 endfunction
 
-" Session completion
-function! Tmux_Session_Names(A,L,P)
-  return system("tmux list-sessions | sed -e 's/:.*$//'")
+function! s:tmux_from_buffer()
+  call system("tmux paste-buffer -t " . s:tmux_pane_number())
 endfunction
 
-" Window completion
-function! Tmux_Window_Names(A,L,P)
-  return system("tmux list-windows -t" . b:tmux_sessionname . ' | grep -e "^\w:" | sed -e "s/ \[[0-9x]*\]$//"')
-endfunction
-
-" Pane completion
-function! Tmux_Pane_Numbers(A,L,P)
-  return system("tmux list-panes -t " . b:tmux_sessionname . ":" . b:tmux_windowname . " | sed -e 's/:.*$//'")
-endfunction
-
-" set tslime.vim variables
-function! s:Tmux_Vars()
-  "let b:tmux_sessionname = input("session name: ", "", "custom,Tmux_Session_Names")
-  "let b:tmux_windowname = substitute(input("window name: ", "", "custom,Tmux_Window_Names"), ":.*$" , '', 'g')
-  let b:tmux_panenumber = input("pane number: ", "", "custom,Tmux_Pane_Numbers")
-
-  if !exists("g:tmux_panenumber")
-    let g:tmux_panenumber = b:tmux_panenumber
+function! s:tmux_pane_number()
+  if !exists("g:tmux_pane_number")
+    let g:tmux_pane_number = input("pane number: ", "")
   end
+  return g:tmux_pane_number
 endfunction
-
-""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
-
-vmap <C-c><C-c> "ry :call Send_to_Tmux(@r)<CR>
-nmap <C-c><C-c> vip<C-c><C-c>
-
-nmap <C-c>v :call <SID>Tmux_Vars()<CR>
